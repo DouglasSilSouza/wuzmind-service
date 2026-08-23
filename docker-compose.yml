@@ -8,13 +8,10 @@ services:
     restart: unless-stopped
     ports:
       - "3002:3000"
-
-networks:
+    networks:
       - ContasNet
-
     volumes:
       - /opt/gastoapp/envs/wuzmind-service.env:/app/.env
-
     deploy:
       replicas: 1
       labels:
