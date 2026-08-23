@@ -67,3 +67,23 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+
+      - name: Prepare and Copy .env to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            mkdir -p /opt/gastoapp/envs
+            echo "${{ secrets.ENV_FILE_CONTENT }}" > /opt/gastoapp/envs/wuzmind-service.env
+
+      - name: Deploy to Portainer via Webhook
+        if: success()
+        run: |
+          if [ -n "${{ secrets.PORTAINER_WEBHOOK_URL }}" ]; then
+            curl -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}"
+          else
+            echo "Portainer Webhook URL not set. Skipping deploy."
+          fi
