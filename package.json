@@ -12,7 +12,8 @@
     "start:prod": "node dist/main.js",
     "test": "node --test tests/unit/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts"
+    "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
+    "pretest": "nest build"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
