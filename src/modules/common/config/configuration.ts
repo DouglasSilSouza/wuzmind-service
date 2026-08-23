@@ -25,7 +25,7 @@ export interface AppConfig {
 }
 
 export const configuration = (): AppConfig => {
-  const rawOrder = process.env.AI_PROVIDER_ORDER || 'OLLAMA,GEMINI,OPENAI,STATIC';
+  const rawOrder = process.env.AI_PROVIDER_ORDER || 'OLLAMA,OPENAI,GEMINI,STATIC';
   const aiProviderOrder = rawOrder
     .split(',')
     .map((s) => s.trim().toUpperCase())
@@ -41,9 +41,9 @@ export const configuration = (): AppConfig => {
     dbUser: process.env.DB_USER,
     dbPassword: process.env.DB_PASSWORD,
     wuzmindApiKey: process.env.WUZMIND_API_KEY || '',
-    aiProviderOrder: aiProviderOrder.length > 0 ? aiProviderOrder : ['OLLAMA', 'GEMINI', 'OPENAI', 'STATIC'],
-    aiRequestTimeoutMs: parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '4000', 10),
-    aiMaxRetriesPerProvider: parseInt(process.env.AI_MAX_RETRIES_PER_PROVIDER || '1', 10),
+    aiProviderOrder: aiProviderOrder.length > 0 ? aiProviderOrder : ['OLLAMA', 'OPENAI', 'GEMINI', 'STATIC'],
+    aiRequestTimeoutMs: parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '3000', 10),
+    aiMaxRetriesPerProvider: parseInt(process.env.AI_MAX_RETRIES_PER_PROVIDER || '0', 10),
     aiMinConfidence: parseFloat(process.env.AI_MIN_CONFIDENCE || '0.65'),
     ollamaUrl: process.env.OLLAMA_URL || 'http://ollama:11434',
     ollamaPrimaryModel: process.env.OLLAMA_PRIMARY_MODEL || 'qwen2.5:3b',

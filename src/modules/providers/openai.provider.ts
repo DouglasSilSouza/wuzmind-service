@@ -17,19 +17,19 @@ import { buildMediaClassifierPrompt } from '../ai/prompts/media-classifier.promp
 export class OpenAiProvider implements AiProvider {
   readonly name = 'OPENAI';
   private readonly apiKey?: string;
-  private readonly model?: string;
+  private readonly model: string;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
 
   constructor(private readonly configService: ConfigService) {
     this.apiKey = this.configService.get<string>('OPENAI_API_KEY');
     this.model = this.configService.get<string>('OPENAI_MODEL') || 'gpt-4o-mini';
-    this.baseUrl = this.configService.get<string>('OPENAI_BASE_URL') || 'https://api.openai.com/v1';
-    this.timeoutMs = parseInt(this.configService.get<string>('AI_REQUEST_TIMEOUT_MS') || '8000', 10);
+    this.baseUrl = (this.configService.get<string>('OPENAI_BASE_URL') || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    this.timeoutMs = parseInt(this.configService.get<string>('AI_REQUEST_TIMEOUT_MS') || '3000', 10);
   }
 
   async isAvailable(): Promise<boolean> {
-    return Boolean(this.apiKey && this.model);
+    return Boolean(this.apiKey);
   }
 
   private cleanJson(raw: string): string {
@@ -45,8 +45,8 @@ export class OpenAiProvider implements AiProvider {
   }
 
   private async callOpenAi(prompt: string): Promise<string> {
-    if (!this.apiKey || !this.model) {
-      throw new Error('OpenAI provider is not configured with API key and model');
+    if (!this.apiKey) {
+      throw new Error('OpenAI API key is not configured');
     }
 
     const url = `${this.baseUrl}/chat/completions`;
@@ -65,6 +65,7 @@ export class OpenAiProvider implements AiProvider {
           messages: [{ role: 'user', content: prompt }],
           response_format: { type: 'json_object' },
           temperature: 0.1,
+          max_tokens: 200,
         }),
         signal: controller.signal,
       });
@@ -75,7 +76,7 @@ export class OpenAiProvider implements AiProvider {
         throw new Error(`OpenAI API returned status ${res.status}: ${errBody}`);
       }
 
-      const data = await res.json() as any;
+      const data = (await res.json()) as any;
       const content = data?.choices?.[0]?.message?.content;
       if (!content) {
         throw new Error('OpenAI response missing message content');

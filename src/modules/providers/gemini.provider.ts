@@ -12,25 +12,27 @@ import {
 import { buildIntentClassifierPrompt } from '../ai/prompts/intent-classifier.prompt';
 import { buildRecoveryPrompt } from '../ai/prompts/recovery.prompt';
 import { buildMediaClassifierPrompt } from '../ai/prompts/media-classifier.prompt';
+import { StructuredLoggerService } from '../common/logger/structured-logger.service';
 
 @Injectable()
 export class GeminiProvider implements AiProvider {
   readonly name = 'GEMINI';
   private readonly apiKey?: string;
-  private readonly model?: string;
+  private readonly model: string;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
+  private readonly logger = new StructuredLoggerService(GeminiProvider.name);
 
   constructor(private readonly configService: ConfigService) {
     this.apiKey = this.configService.get<string>('GEMINI_API_KEY');
     const rawModel = this.configService.get<string>('GEMINI_MODEL') || 'gemini-1.5-flash';
     this.model = rawModel.replace(/^models\//, '');
-    this.baseUrl = this.configService.get<string>('GEMINI_BASE_URL') || 'https://generativelanguage.googleapis.com/v1beta';
-    this.timeoutMs = parseInt(this.configService.get<string>('AI_REQUEST_TIMEOUT_MS') || '8000', 10);
+    this.baseUrl = (this.configService.get<string>('GEMINI_BASE_URL') || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
+    this.timeoutMs = parseInt(this.configService.get<string>('AI_REQUEST_TIMEOUT_MS') || '3000', 10);
   }
 
   async isAvailable(): Promise<boolean> {
-    return Boolean(this.apiKey && this.model);
+    return Boolean(this.apiKey);
   }
 
   private cleanJson(raw: string): string {
@@ -45,14 +47,13 @@ export class GeminiProvider implements AiProvider {
     return raw;
   }
 
-  private async callGemini(prompt: string): Promise<string> {
-    if (!this.apiKey || !this.model) {
-      throw new Error('Gemini provider is not configured with API key and model');
+  private async callGeminiModel(prompt: string, modelName: string): Promise<string> {
+    if (!this.apiKey) {
+      throw new Error('Gemini API key is not configured');
     }
 
-    const cleanBase = this.baseUrl.replace(/\/+$/, '');
-    const cleanModel = (this.model || 'gemini-1.5-flash').replace(/^models\//, '');
-    const url = `${cleanBase}/models/${cleanModel}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+    const cleanModel = modelName.replace(/^models\//, '');
+    const url = `${this.baseUrl}/models/${cleanModel}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -63,8 +64,8 @@ export class GeminiProvider implements AiProvider {
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            responseMimeType: 'application/json',
             temperature: 0.1,
+            maxOutputTokens: 200,
           },
         }),
         signal: controller.signal,
@@ -72,11 +73,11 @@ export class GeminiProvider implements AiProvider {
       clearTimeout(timer);
 
       if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        throw new Error(`Gemini API returned status ${res.status} for model ${this.model}: ${errBody}`);
+        const errorBody = await res.text().catch(() => '');
+        throw new Error(`Gemini API returned status ${res.status} for model ${cleanModel}: ${errorBody}`);
       }
 
-      const data = await res.json() as any;
+      const data = (await res.json()) as any;
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text) {
         throw new Error('Gemini response missing expected content parts');
@@ -88,9 +89,19 @@ export class GeminiProvider implements AiProvider {
     }
   }
 
+  private async callGeminiWithFallback(prompt: string): Promise<string> {
+    try {
+      return await this.callGeminiModel(prompt, this.model);
+    } catch (err: any) {
+      const fallbackModel = this.model === 'gemini-1.5-flash' ? 'gemini-2.0-flash' : 'gemini-1.5-flash';
+      this.logger.warn(`Gemini primary model ${this.model} failed (${err.message}). Trying fallback ${fallbackModel}...`);
+      return await this.callGeminiModel(prompt, fallbackModel);
+    }
+  }
+
   async classifyIntent(request: IntentClassificationRequest): Promise<IntentClassificationResult> {
     const prompt = buildIntentClassifierPrompt(request);
-    const raw = await this.callGemini(prompt);
+    const raw = await this.callGeminiWithFallback(prompt);
     const parsed = JSON.parse(this.cleanJson(raw));
     return {
       intent: parsed.intent,
@@ -104,7 +115,7 @@ export class GeminiProvider implements AiProvider {
 
   async recoverConversation(request: RecoveryRequest): Promise<RecoveryResult> {
     const prompt = buildRecoveryPrompt(request);
-    const raw = await this.callGemini(prompt);
+    const raw = await this.callGeminiWithFallback(prompt);
     const parsed = JSON.parse(this.cleanJson(raw));
     return {
       action: parsed.action,
@@ -118,7 +129,7 @@ export class GeminiProvider implements AiProvider {
 
   async classifyMedia(request: MediaClassificationRequest): Promise<MediaClassificationResult> {
     const prompt = buildMediaClassifierPrompt(request);
-    const raw = await this.callGemini(prompt);
+    const raw = await this.callGeminiWithFallback(prompt);
     const parsed = JSON.parse(this.cleanJson(raw));
     return {
       classification: parsed.classification,

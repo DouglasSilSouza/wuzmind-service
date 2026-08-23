@@ -10,8 +10,17 @@ export class RecoveryService {
   private matchOptions(message: string, availableOptions?: string[]): string | null {
     if (!availableOptions || availableOptions.length === 0) return null;
     const lower = message.trim().toLowerCase();
+    const normalizedInput = lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    // Number index (e.g. "1", "2")
+    const num = parseInt(lower, 10);
+    if (!isNaN(num) && num >= 1 && num <= availableOptions.length) {
+      return availableOptions[num - 1];
+    }
+
     for (const opt of availableOptions) {
-      if (opt.toLowerCase() === lower) {
+      const normOpt = opt.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (normOpt === normalizedInput || normOpt.includes(normalizedInput) || normalizedInput.includes(normOpt)) {
         return opt;
       }
     }
@@ -22,14 +31,14 @@ export class RecoveryService {
     const messageText = (dto.message || dto.text || '').trim();
     const raw = messageText.toLowerCase();
 
-    // Check if user actually picked one of the options
+    // Direct match against available options
     const matched = this.matchOptions(messageText, dto.availableOptions);
     if (matched) {
       return {
         action: SuggestedActionEnum.CONTINUE_TYPEBOT,
-        message: `Opção selecionada: ${matched}`,
+        message: `Entendido! Selecionando ${matched}...`,
         matchedOption: matched,
-        intent: 'OPCAO_SELECIONADA',
+        intent: 'ESCOLHA_MENU',
         confidence: 1.0,
         provider: 'LOCAL_MATCH',
       };
@@ -47,8 +56,16 @@ export class RecoveryService {
       };
     }
 
-    // Pass to AI Providers
-    const result = await this.aiProviderManager.recoverConversation({ ...dto, message: messageText });
+    // Pass to AI Providers with fast failover
+    const result = await this.aiProviderManager.recoverConversation({
+      phone: dto.phone,
+      message: messageText,
+      currentState: dto.currentState,
+      waitingFor: dto.waitingFor,
+      availableOptions: dto.availableOptions,
+      context: dto.context,
+    });
+
     return {
       action: result.action,
       message: result.message,
