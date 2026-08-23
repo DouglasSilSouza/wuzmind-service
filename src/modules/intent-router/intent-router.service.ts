@@ -14,7 +14,7 @@ export class IntentRouterService {
   ) {}
 
   private checkLocalRules(dto: IntentClassifyRequestDto): IntentClassifyResponseDto | null {
-    const raw = (dto.message || '').trim().toLowerCase();
+    const raw = (dto.message || dto.text || '').trim().toLowerCase();
 
     // 1. Prompt injection guard
     if (PromptInjectionGuard.containsInjection(raw)) {
@@ -115,7 +115,8 @@ export class IntentRouterService {
       return local;
     }
 
-    const sanitizedMessage = PromptInjectionGuard.sanitize(dto.message);
+    const raw = dto.message || dto.text || '';
+    const sanitizedMessage = PromptInjectionGuard.sanitize(raw);
     const result = await this.aiProviderManager.classifyIntent({
       ...dto,
       message: sanitizedMessage,

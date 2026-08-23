@@ -1,4 +1,4 @@
-import { IsArray, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsObject, IsOptional, IsString } from 'class-validator';
 import { IntentEnum } from '../../common/enums/intent.enum';
 import { SuggestedActionEnum } from '../../common/enums/suggested-action.enum';
 
@@ -7,9 +7,13 @@ export class IntentClassifyRequestDto {
   @IsString()
   phone?: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  message!: string;
+  message?: string;
+
+  @IsOptional()
+  @IsString()
+  text?: string;
 
   @IsOptional()
   @IsString()

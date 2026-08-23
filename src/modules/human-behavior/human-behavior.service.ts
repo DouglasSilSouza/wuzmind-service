@@ -71,7 +71,8 @@ export class HumanBehaviorService {
   }
 
   detect(dto: DetectHumanBehaviorDto): HumanBehaviorResponseDto {
-    const local = this.matchRule(dto.message);
+    const raw = dto.message || dto.text || '';
+    const local = this.matchRule(raw);
     if (local.isMatch) {
       return {
         isHumanBehavior: true,

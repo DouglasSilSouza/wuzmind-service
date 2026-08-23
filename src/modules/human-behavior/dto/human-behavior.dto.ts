@@ -1,10 +1,14 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 import { HumanBehaviorCategoryEnum } from '../../common/enums/human-behavior-category.enum';
 
 export class DetectHumanBehaviorDto {
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  message!: string;
+  message?: string;
+
+  @IsOptional()
+  @IsString()
+  text?: string;
 }
 
 export class HumanBehaviorResponseDto {

@@ -19,10 +19,11 @@ export class RecoveryService {
   }
 
   async recover(dto: RecoveryRequestDto): Promise<RecoveryResponseDto> {
-    const raw = dto.message.trim().toLowerCase();
+    const messageText = (dto.message || dto.text || '').trim();
+    const raw = messageText.toLowerCase();
 
     // Check if user actually picked one of the options
-    const matched = this.matchOptions(dto.message, dto.availableOptions);
+    const matched = this.matchOptions(messageText, dto.availableOptions);
     if (matched) {
       return {
         action: SuggestedActionEnum.CONTINUE_TYPEBOT,
@@ -47,7 +48,7 @@ export class RecoveryService {
     }
 
     // Pass to AI Providers
-    const result = await this.aiProviderManager.recoverConversation(dto);
+    const result = await this.aiProviderManager.recoverConversation({ ...dto, message: messageText });
     return {
       action: result.action,
       message: result.message,
