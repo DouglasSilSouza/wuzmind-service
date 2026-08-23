@@ -9,7 +9,7 @@ services:
     ports:
       - "3002:3000"
     env_file:
-      - /opt/gastoapp/envs/wuzmind-service.env
+      - .env
 
     networks:
       - ContasNet
