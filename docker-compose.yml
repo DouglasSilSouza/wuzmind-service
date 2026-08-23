@@ -8,10 +8,8 @@ services:
     restart: unless-stopped
     ports:
       - "3002:3000"
-    env_file:
-      - .env
 
-    networks:
+networks:
       - ContasNet
 
     volumes:
