@@ -3,14 +3,9 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { StructuredLoggerService } from './modules/common/logger/structured-logger.service';
-import { ensureDatabase } from './database/ensure-database';
 
 async function bootstrap() {
   const logger = new StructuredLoggerService('Bootstrap');
-  
-  // Ensure database exists before TypeORM connects
-  await ensureDatabase();
-
   const app = await NestFactory.create(AppModule, {
     logger: new StructuredLoggerService('NestApplication'),
   });
