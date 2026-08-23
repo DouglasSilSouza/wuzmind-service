@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiProvider } from '../ai/ai-provider.interface';
 import {
@@ -15,7 +15,7 @@ import { buildMediaClassifierPrompt } from '../ai/prompts/media-classifier.promp
 import { StructuredLoggerService } from '../common/logger/structured-logger.service';
 
 @Injectable()
-export class OllamaProvider implements AiProvider {
+export class OllamaProvider implements AiProvider, OnModuleInit {
   readonly name = 'OLLAMA';
   private readonly baseUrl: string;
   private readonly primaryModel: string;
@@ -28,6 +28,31 @@ export class OllamaProvider implements AiProvider {
     this.primaryModel = this.configService.get<string>('OLLAMA_PRIMARY_MODEL') || 'qwen2.5:3b';
     this.fallbackModel = this.configService.get<string>('OLLAMA_FALLBACK_MODEL') || 'llama3.2:3b';
     this.timeoutMs = parseInt(this.configService.get<string>('AI_REQUEST_TIMEOUT_MS') || '8000', 10);
+  }
+
+  async onModuleInit() {
+    // Warm up model in background to keep it resident in RAM
+    this.warmupModel(this.primaryModel).catch(() => {});
+  }
+
+  private async warmupModel(model: string): Promise<void> {
+    try {
+      const isUp = await this.isAvailable();
+      if (!isUp) return;
+      this.logger.log(`Pre-warming Ollama model ${model} into memory...`);
+      await fetch(`${this.baseUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          prompt: 'ping',
+          keep_alive: '24h',
+        }),
+      });
+      this.logger.log(`Ollama model ${model} is now warm and resident in RAM.`);
+    } catch {
+      // Non-blocking warmup
+    }
   }
 
   async isAvailable(): Promise<boolean> {
@@ -69,6 +94,7 @@ export class OllamaProvider implements AiProvider {
           prompt,
           stream: false,
           format: 'json',
+          keep_alive: '24h',
           options: {
             temperature: 0.1,
           },
@@ -97,8 +123,8 @@ export class OllamaProvider implements AiProvider {
     try {
       const raw = await this.callModel(prompt, this.primaryModel);
       return { raw, usedModel: this.primaryModel };
-    } catch (primaryErr) {
-      this.logger.warn(`Ollama primary model ${this.primaryModel} failed. Trying fallback model ${this.fallbackModel}`);
+    } catch (primaryErr: any) {
+      this.logger.warn(`Ollama primary model ${this.primaryModel} failed (${primaryErr.message}). Trying fallback model ${this.fallbackModel}`);
       const raw = await this.callModel(prompt, this.fallbackModel);
       return { raw, usedModel: this.fallbackModel };
     }
