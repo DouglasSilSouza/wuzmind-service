@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiProvider } from '../ai/ai-provider.interface';
 import {
@@ -12,16 +12,14 @@ import {
 import { buildIntentClassifierPrompt } from '../ai/prompts/intent-classifier.prompt';
 import { buildRecoveryPrompt } from '../ai/prompts/recovery.prompt';
 import { buildMediaClassifierPrompt } from '../ai/prompts/media-classifier.prompt';
-import { StructuredLoggerService } from '../common/logger/structured-logger.service';
 
 @Injectable()
-export class OllamaProvider implements AiProvider, OnModuleInit {
+export class OllamaProvider implements AiProvider {
   readonly name = 'OLLAMA';
   private readonly baseUrl: string;
   private readonly primaryModel: string;
   private readonly fallbackModel: string;
   private readonly timeoutMs: number;
-  private readonly logger = new StructuredLoggerService(OllamaProvider.name);
 
   constructor(private readonly configService: ConfigService) {
     this.baseUrl = (this.configService.get<string>('OLLAMA_URL') || 'http://ollama:11434').replace(/\/+$/, '');
@@ -30,38 +28,10 @@ export class OllamaProvider implements AiProvider, OnModuleInit {
     this.timeoutMs = parseInt(this.configService.get<string>('AI_REQUEST_TIMEOUT_MS') || '3000', 10);
   }
 
-  async onModuleInit() {
-    // Non-blocking pre-warmup on startup
-    this.warmupModel(this.primaryModel).catch(() => {});
-  }
-
-  private async warmupModel(model: string): Promise<void> {
-    try {
-      const isUp = await this.isAvailable();
-      if (!isUp) return;
-      this.logger.log(`[Ollama Warmup] Pre-warming model ${model} into RAM with keep_alive: 24h...`);
-      await fetch(`${this.baseUrl}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          prompt: 'ping',
-          keep_alive: '24h',
-          options: {
-            num_predict: 1,
-          },
-        }),
-      });
-      this.logger.log(`[Ollama Warmup] Model ${model} is now warm and resident in RAM.`);
-    } catch {
-      // Non-blocking warmup
-    }
-  }
-
   async isAvailable(): Promise<boolean> {
     try {
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 1500);
+      const id = setTimeout(() => controller.abort(), 1000);
       const res = await fetch(`${this.baseUrl}/api/tags`, {
         method: 'GET',
         signal: controller.signal,
@@ -97,7 +67,6 @@ export class OllamaProvider implements AiProvider, OnModuleInit {
           prompt,
           stream: false,
           format: 'json',
-          keep_alive: '24h',
           options: {
             temperature: 0.1,
             num_predict: 150,
@@ -108,13 +77,12 @@ export class OllamaProvider implements AiProvider, OnModuleInit {
       clearTimeout(timer);
 
       if (!response.ok) {
-        const errBody = await response.text().catch(() => '');
-        throw new Error(`Ollama returned status ${response.status} for model ${model}: ${errBody}`);
+        throw new Error(`Ollama returned status ${response.status}`);
       }
 
       const data = (await response.json()) as { response?: string };
       if (!data.response) {
-        throw new Error('Ollama returned empty response field');
+        throw new Error('INVALID_PROVIDER_JSON');
       }
       return data.response;
     } catch (err) {
@@ -127,8 +95,7 @@ export class OllamaProvider implements AiProvider, OnModuleInit {
     try {
       const raw = await this.callModel(prompt, this.primaryModel);
       return { raw, usedModel: this.primaryModel };
-    } catch (primaryErr: any) {
-      this.logger.warn(`Ollama primary model ${this.primaryModel} failed (${primaryErr.message}). Trying fallback model ${this.fallbackModel}...`);
+    } catch {
       const raw = await this.callModel(prompt, this.fallbackModel);
       return { raw, usedModel: this.fallbackModel };
     }

@@ -25,7 +25,7 @@ export class OpenAiProvider implements AiProvider {
     this.apiKey = this.configService.get<string>('OPENAI_API_KEY');
     this.model = this.configService.get<string>('OPENAI_MODEL') || 'gpt-4o-mini';
     this.baseUrl = (this.configService.get<string>('OPENAI_BASE_URL') || 'https://api.openai.com/v1').replace(/\/+$/, '');
-    this.timeoutMs = parseInt(this.configService.get<string>('AI_REQUEST_TIMEOUT_MS') || '3000', 10);
+    this.timeoutMs = parseInt(this.configService.get<string>('OPENAI_REQUEST_TIMEOUT_MS') || '5000', 10);
   }
 
   async isAvailable(): Promise<boolean> {
@@ -46,7 +46,9 @@ export class OpenAiProvider implements AiProvider {
 
   private async callOpenAi(prompt: string): Promise<string> {
     if (!this.apiKey) {
-      throw new Error('OpenAI API key is not configured');
+      const err = new Error('OPENAI_UNAUTHORIZED');
+      (err as any).code = 'OPENAI_UNAUTHORIZED';
+      throw err;
     }
 
     const url = `${this.baseUrl}/chat/completions`;
@@ -65,25 +67,38 @@ export class OpenAiProvider implements AiProvider {
           messages: [{ role: 'user', content: prompt }],
           response_format: { type: 'json_object' },
           temperature: 0.1,
-          max_tokens: 200,
+          max_tokens: 300,
         }),
         signal: controller.signal,
       });
       clearTimeout(timer);
 
       if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        throw new Error(`OpenAI API returned status ${res.status}: ${errBody}`);
+        if (res.status === 401 || res.status === 403) {
+          const err = new Error('OPENAI_UNAUTHORIZED');
+          (err as any).code = 'OPENAI_UNAUTHORIZED';
+          throw err;
+        }
+        const err = new Error(`OPENAI_ERROR (${res.status})`);
+        (err as any).code = 'OPENAI_ERROR';
+        throw err;
       }
 
       const data = (await res.json()) as any;
       const content = data?.choices?.[0]?.message?.content;
       if (!content) {
-        throw new Error('OpenAI response missing message content');
+        const err = new Error('INVALID_PROVIDER_JSON');
+        (err as any).code = 'INVALID_PROVIDER_JSON';
+        throw err;
       }
       return content;
-    } catch (err) {
+    } catch (err: any) {
       clearTimeout(timer);
+      if (err.name === 'AbortError') {
+        const timeoutErr = new Error('OPENAI_TIMEOUT');
+        (timeoutErr as any).code = 'OPENAI_TIMEOUT';
+        throw timeoutErr;
+      }
       throw err;
     }
   }
@@ -91,7 +106,15 @@ export class OpenAiProvider implements AiProvider {
   async classifyIntent(request: IntentClassificationRequest): Promise<IntentClassificationResult> {
     const prompt = buildIntentClassifierPrompt(request);
     const raw = await this.callOpenAi(prompt);
-    const parsed = JSON.parse(this.cleanJson(raw));
+    let parsed: any;
+    try {
+      parsed = JSON.parse(this.cleanJson(raw));
+    } catch {
+      const err = new Error('INVALID_PROVIDER_JSON');
+      (err as any).code = 'INVALID_PROVIDER_JSON';
+      throw err;
+    }
+
     return {
       intent: parsed.intent,
       confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.92,
@@ -105,7 +128,15 @@ export class OpenAiProvider implements AiProvider {
   async recoverConversation(request: RecoveryRequest): Promise<RecoveryResult> {
     const prompt = buildRecoveryPrompt(request);
     const raw = await this.callOpenAi(prompt);
-    const parsed = JSON.parse(this.cleanJson(raw));
+    let parsed: any;
+    try {
+      parsed = JSON.parse(this.cleanJson(raw));
+    } catch {
+      const err = new Error('INVALID_PROVIDER_JSON');
+      (err as any).code = 'INVALID_PROVIDER_JSON';
+      throw err;
+    }
+
     return {
       action: parsed.action,
       message: parsed.message,
@@ -119,7 +150,15 @@ export class OpenAiProvider implements AiProvider {
   async classifyMedia(request: MediaClassificationRequest): Promise<MediaClassificationResult> {
     const prompt = buildMediaClassifierPrompt(request);
     const raw = await this.callOpenAi(prompt);
-    const parsed = JSON.parse(this.cleanJson(raw));
+    let parsed: any;
+    try {
+      parsed = JSON.parse(this.cleanJson(raw));
+    } catch {
+      const err = new Error('INVALID_PROVIDER_JSON');
+      (err as any).code = 'INVALID_PROVIDER_JSON';
+      throw err;
+    }
+
     return {
       classification: parsed.classification,
       confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.90,

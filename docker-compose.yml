@@ -6,8 +6,6 @@ services:
     image: ghcr.io/douglassilsouza/wuzmind-service:latest
     container_name: wuzmind-service
     restart: unless-stopped
-    depends_on:
-      - ollama
     ports:
       - "3002:3000"
     environment:
@@ -23,21 +21,22 @@ services:
 
       WUZMIND_API_KEY: ${WUZMIND_API_KEY}
 
-      AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-OLLAMA,OPENAI,GEMINI,STATIC}
-      AI_REQUEST_TIMEOUT_MS: ${AI_REQUEST_TIMEOUT_MS:-3000}
+      AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-GEMINI,OPENAI,STATIC}
+      AI_TOTAL_TIMEOUT_MS: ${AI_TOTAL_TIMEOUT_MS:-12000}
       AI_MAX_RETRIES_PER_PROVIDER: ${AI_MAX_RETRIES_PER_PROVIDER:-0}
       AI_MIN_CONFIDENCE: ${AI_MIN_CONFIDENCE:-0.65}
 
-      OLLAMA_URL: http://ollama:11434
-      OLLAMA_PRIMARY_MODEL: ${OLLAMA_PRIMARY_MODEL:-qwen2.5:3b}
-      OLLAMA_FALLBACK_MODEL: ${OLLAMA_FALLBACK_MODEL:-llama3.2:3b}
-
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL}
+      GEMINI_MODEL_CANDIDATES: ${GEMINI_MODEL_CANDIDATES:-gemini-2.5-flash,gemini-2.5-flash-lite,gemini-1.5-flash,gemini-2.0-flash}
+      GEMINI_MODELS_CACHE_TTL_MS: ${GEMINI_MODELS_CACHE_TTL_MS:-3600000}
+      GEMINI_DISCOVERY_TIMEOUT_MS: ${GEMINI_DISCOVERY_TIMEOUT_MS:-5000}
+      GEMINI_REQUEST_TIMEOUT_MS: ${GEMINI_REQUEST_TIMEOUT_MS:-6000}
       GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
 
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_REQUEST_TIMEOUT_MS: ${OPENAI_REQUEST_TIMEOUT_MS:-5000}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
 
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -55,21 +54,6 @@ services:
         - traefik.http.routers.wuzmind.tls=true
         - traefik.http.routers.wuzmind.tls.certresolver=letsencryptresolver
         - traefik.http.services.wuzmind.loadbalancer.server.port=3000
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: wuzmind-ollama
-    restart: unless-stopped
-    environment:
-      - OLLAMA_KEEP_ALIVE=24h
-      - OLLAMA_NUM_PARALLEL=1
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - ContasNet
-
-volumes:
-  ollama_data:
 
 networks:
   ContasNet:

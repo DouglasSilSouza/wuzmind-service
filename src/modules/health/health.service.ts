@@ -1,13 +1,13 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
-import { AiProviderManager } from '../ai/ai-provider.manager';
+import { GeminiModelDiscoveryService } from '../providers/gemini-model-discovery.service';
 
 @Injectable()
 export class HealthService {
   constructor(
     private readonly configService: ConfigService,
-    private readonly aiProviderManager: AiProviderManager,
+    private readonly geminiDiscovery: GeminiModelDiscoveryService,
     @Optional() private readonly dataSource?: DataSource,
   ) {}
 
@@ -22,30 +22,35 @@ export class HealthService {
       databaseStatus = 'down';
     }
 
-    let ollamaStatus = 'down';
-    try {
-      const ollamaUrl = this.configService.get<string>('OLLAMA_URL') || 'http://ollama:11434';
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`${ollamaUrl}/api/tags`, { signal: controller.signal });
-      clearTimeout(id);
-      if (res.ok) {
-        ollamaStatus = 'up';
+    const geminiKey = this.configService.get<string>('GEMINI_API_KEY');
+    let geminiStatus = 'not_configured';
+    let selectedGeminiModel: string | null = null;
+
+    if (geminiKey) {
+      try {
+        selectedGeminiModel = await this.geminiDiscovery.getSelectedModel();
+        geminiStatus = selectedGeminiModel ? 'up' : 'degraded';
+      } catch {
+        geminiStatus = 'degraded';
       }
-    } catch {
-      ollamaStatus = 'down';
     }
 
-    const geminiKey = this.configService.get<string>('GEMINI_API_KEY');
     const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
 
     return {
       status: 'ok',
       service: 'wuzmind',
       providers: {
-        ollama: ollamaStatus,
-        gemini: geminiKey ? 'configured' : 'not_configured',
-        openai: openaiKey ? 'configured' : 'not_configured',
+        gemini: {
+          status: geminiStatus,
+          selectedModel: selectedGeminiModel || 'none',
+        },
+        openai: {
+          status: openaiKey ? 'configured' : 'not_configured',
+        },
+        static: {
+          status: 'up',
+        },
       },
       database: databaseStatus,
     };

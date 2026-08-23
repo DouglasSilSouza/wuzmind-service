@@ -1,25 +1,30 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { OllamaProvider } from '../providers/ollama.provider';
+import { ProviderEventEntity } from '../../database/entities/provider-event.entity';
+import { GeminiModelDiscoveryService } from '../providers/gemini-model-discovery.service';
 import { GeminiProvider } from '../providers/gemini.provider';
 import { OpenAiProvider } from '../providers/openai.provider';
+import { OllamaProvider } from '../providers/ollama.provider';
 import { StaticFallbackProvider } from '../providers/static-fallback.provider';
 import { AiProviderManager } from './ai-provider.manager';
-import { ProviderEventEntity } from '../../database/entities/provider-event.entity';
 
 @Module({
-  imports: [
-    ConfigModule,
-    TypeOrmModule.forFeature([ProviderEventEntity]),
-  ],
+  imports: [TypeOrmModule.forFeature([ProviderEventEntity])],
   providers: [
-    OllamaProvider,
+    GeminiModelDiscoveryService,
     GeminiProvider,
     OpenAiProvider,
+    OllamaProvider,
     StaticFallbackProvider,
     AiProviderManager,
   ],
-  exports: [AiProviderManager, OllamaProvider, GeminiProvider, OpenAiProvider, StaticFallbackProvider],
+  exports: [
+    GeminiModelDiscoveryService,
+    GeminiProvider,
+    OpenAiProvider,
+    OllamaProvider,
+    StaticFallbackProvider,
+    AiProviderManager,
+  ],
 })
 export class AiModule {}

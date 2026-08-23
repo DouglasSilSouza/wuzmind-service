@@ -5,37 +5,30 @@ import { StaticFallbackProvider } from '../../dist/modules/providers/static-fall
 import { IntentEnum } from '../../dist/modules/common/enums/intent.enum.js';
 import { SuggestedActionEnum } from '../../dist/modules/common/enums/suggested-action.enum.js';
 
-function createMockConfig(order = 'OLLAMA,GEMINI,OPENAI,STATIC') {
+function createMockConfig(order = 'GEMINI,OPENAI,STATIC', maxRetries = '0', totalTimeout = '12000') {
   return {
     get: (key) => {
       if (key === 'AI_PROVIDER_ORDER') return order;
-      if (key === 'AI_MAX_RETRIES_PER_PROVIDER') return '1';
+      if (key === 'AI_MAX_RETRIES_PER_PROVIDER') return maxRetries;
+      if (key === 'AI_TOTAL_TIMEOUT_MS') return totalTimeout;
       if (key === 'AI_MIN_CONFIDENCE') return '0.65';
       return null;
     },
   };
 }
 
-test('AiProviderManager - Failover from Ollama to Gemini when Ollama fails', async () => {
-  const mockConfig = createMockConfig('OLLAMA,GEMINI,OPENAI,STATIC');
-
-  const mockOllama = {
-    name: 'OLLAMA',
-    isAvailable: async () => true,
-    classifyIntent: async () => { throw new Error('Ollama connection timeout'); },
-    recoverConversation: async () => { throw new Error('Ollama timeout'); },
-    classifyMedia: async () => { throw new Error('Ollama timeout'); },
-  };
+test('AiProviderManager - Prioritizes Gemini when available and configured', async () => {
+  const mockConfig = createMockConfig('GEMINI,OPENAI,STATIC');
 
   const mockGemini = {
     name: 'GEMINI',
     isAvailable: async () => true,
     classifyIntent: async () => ({
-      intent: IntentEnum.CONSULTAR_RELATORIO,
+      intent: IntentEnum.REGISTRAR_GASTO,
       confidence: 0.95,
-      entities: { bank: 'NUBANK' },
+      entities: { value: 50, category: 'mercado' },
       suggestedAction: SuggestedActionEnum.START_TYPEBOT_FLOW,
-      targetFlow: 'RELATORIOS',
+      targetFlow: 'GASTOS',
       provider: 'GEMINI',
     }),
     recoverConversation: async () => ({}),
@@ -43,43 +36,150 @@ test('AiProviderManager - Failover from Ollama to Gemini when Ollama fails', asy
   };
 
   const mockOpenAi = { name: 'OPENAI', isAvailable: async () => true };
+  const mockOllama = { name: 'OLLAMA', isAvailable: async () => true };
   const staticFallback = new StaticFallbackProvider();
 
   const manager = new AiProviderManager(
     mockConfig,
-    mockOllama,
     mockGemini,
     mockOpenAi,
+    mockOllama,
     staticFallback,
   );
 
   const result = await manager.classifyIntent({
-    message: 'quanto gastei no nubank esse mês?',
+    message: 'gastei 50 no mercado',
   });
 
   assert.equal(result.provider, 'GEMINI');
-  assert.equal(result.intent, IntentEnum.CONSULTAR_RELATORIO);
+  assert.equal(result.intent, IntentEnum.REGISTRAR_GASTO);
   assert.equal(result.confidence, 0.95);
 });
 
-test('AiProviderManager - Total Failover to StaticFallbackProvider when all AI providers fail', async () => {
-  const mockConfig = createMockConfig('OLLAMA,GEMINI,OPENAI,STATIC');
+test('AiProviderManager - Failover to OpenAI when Gemini fails with 404/Timeout', async () => {
+  const mockConfig = createMockConfig('GEMINI,OPENAI,STATIC');
+
+  const mockGemini = {
+    name: 'GEMINI',
+    isAvailable: async () => true,
+    classifyIntent: async () => {
+      const err = new Error('GEMINI_MODEL_NOT_FOUND');
+      err.code = 'GEMINI_MODEL_NOT_FOUND';
+      throw err;
+    },
+    recoverConversation: async () => { throw new Error('Refused'); },
+    classifyMedia: async () => { throw new Error('Refused'); },
+  };
+
+  const mockOpenAi = {
+    name: 'OPENAI',
+    isAvailable: async () => true,
+    classifyIntent: async () => ({
+      intent: IntentEnum.REGISTRAR_GASTO,
+      confidence: 0.92,
+      entities: { value: 30, category: 'transporte' },
+      suggestedAction: SuggestedActionEnum.START_TYPEBOT_FLOW,
+      targetFlow: 'GASTOS',
+      provider: 'OPENAI',
+    }),
+    recoverConversation: async () => ({}),
+    classifyMedia: async () => ({}),
+  };
+
+  const mockOllama = { name: 'OLLAMA', isAvailable: async () => true };
+  const staticFallback = new StaticFallbackProvider();
+
+  const manager = new AiProviderManager(
+    mockConfig,
+    mockGemini,
+    mockOpenAi,
+    mockOllama,
+    staticFallback,
+  );
+
+  const result = await manager.classifyIntent({
+    message: 'gastei 30 no uber',
+  });
+
+  assert.equal(result.provider, 'OPENAI');
+  assert.equal(result.intent, IntentEnum.REGISTRAR_GASTO);
+  assert.equal(result.confidence, 0.92);
+});
+
+test('AiProviderManager - Ollama is NOT called when default order is GEMINI,OPENAI,STATIC', async () => {
+  const mockConfig = createMockConfig('GEMINI,OPENAI,STATIC');
+  let ollamaCalled = false;
+
+  const mockGemini = {
+    name: 'GEMINI',
+    isAvailable: async () => true,
+    classifyIntent: async () => { throw new Error('Gemini failed'); },
+    recoverConversation: async () => { throw new Error('Refused'); },
+    classifyMedia: async () => { throw new Error('Refused'); },
+  };
+
+  const mockOpenAi = {
+    name: 'OPENAI',
+    isAvailable: async () => true,
+    classifyIntent: async () => ({
+      intent: IntentEnum.REGISTRAR_ENTRADA,
+      confidence: 0.90,
+      entities: { value: 1000 },
+      suggestedAction: SuggestedActionEnum.START_TYPEBOT_FLOW,
+      targetFlow: 'ENTRADAS',
+      provider: 'OPENAI',
+    }),
+    recoverConversation: async () => ({}),
+    classifyMedia: async () => ({}),
+  };
+
+  const mockOllama = {
+    name: 'OLLAMA',
+    isAvailable: async () => true,
+    classifyIntent: async () => {
+      ollamaCalled = true;
+      throw new Error('Ollama should not be called');
+    },
+    recoverConversation: async () => { throw new Error('Refused'); },
+    classifyMedia: async () => { throw new Error('Refused'); },
+  };
+
+  const staticFallback = new StaticFallbackProvider();
+
+  const manager = new AiProviderManager(
+    mockConfig,
+    mockGemini,
+    mockOpenAi,
+    mockOllama,
+    staticFallback,
+  );
+
+  const result = await manager.classifyIntent({
+    message: 'recebi 1000 reais de pix',
+  });
+
+  assert.equal(result.provider, 'OPENAI');
+  assert.equal(ollamaCalled, false, 'Ollama was called despite being removed from provider order');
+});
+
+test('AiProviderManager - Total Failover to StaticFallbackProvider when Gemini and OpenAI fail', async () => {
+  const mockConfig = createMockConfig('GEMINI,OPENAI,STATIC');
 
   const failingProvider = (name) => ({
     name,
     isAvailable: async () => true,
-    classifyIntent: async () => { throw new Error(`${name} service unavailable 503`); },
-    recoverConversation: async () => { throw new Error(`${name} 503`); },
-    classifyMedia: async () => { throw new Error(`${name} 503`); },
+    classifyIntent: async () => { throw new Error(`${name} 503 unavailable`); },
+    recoverConversation: async () => { throw new Error('503'); },
+    classifyMedia: async () => { throw new Error('503'); },
   });
 
   const staticFallback = new StaticFallbackProvider();
 
   const manager = new AiProviderManager(
     mockConfig,
-    failingProvider('OLLAMA'),
     failingProvider('GEMINI'),
     failingProvider('OPENAI'),
+    failingProvider('OLLAMA'),
     staticFallback,
   );
 
@@ -93,33 +193,20 @@ test('AiProviderManager - Total Failover to StaticFallbackProvider when all AI p
   assert.equal(result.suggestedAction, SuggestedActionEnum.REDISPLAY_MENU);
 });
 
-test('AiProviderManager - Circuit breaker trips after consecutive failures', async () => {
-  const mockConfig = createMockConfig('OLLAMA,STATIC');
-  let ollamaCallCount = 0;
+test('AiProviderManager - Global deadline trips when time is exceeded', async () => {
+  const mockConfig = createMockConfig('GEMINI,OPENAI,STATIC', '0', '-100'); // Expired deadline
 
-  const flakyOllama = {
-    name: 'OLLAMA',
+  const mockGemini = {
+    name: 'GEMINI',
     isAvailable: async () => true,
-    classifyIntent: async () => {
-      ollamaCallCount++;
-      throw new Error('Connection refused');
-    },
-    recoverConversation: async () => { throw new Error('Refused'); },
-    classifyMedia: async () => { throw new Error('Refused'); },
+    classifyIntent: async () => { throw new Error('Should not be executed if deadline expired'); },
+    recoverConversation: async () => ({}),
+    classifyMedia: async () => ({}),
   };
 
   const staticFallback = new StaticFallbackProvider();
-  const manager = new AiProviderManager(mockConfig, flakyOllama, flakyOllama, flakyOllama, staticFallback);
+  const manager = new AiProviderManager(mockConfig, mockGemini, mockGemini, mockGemini, staticFallback);
 
-  // Calls 1, 2, 3 fail, incrementing consecutive failures to 3 and tripping the circuit breaker
-  await manager.classifyIntent({ message: 'msg 1' });
-  await manager.classifyIntent({ message: 'msg 2' });
-  await manager.classifyIntent({ message: 'msg 3' });
-
-  const callsBeforeCircuitOpen = ollamaCallCount;
-
-  // Call 4 should skip Ollama immediately due to open circuit
-  const res4 = await manager.classifyIntent({ message: 'msg 4' });
-  assert.equal(res4.provider, 'STATIC');
-  assert.equal(ollamaCallCount, callsBeforeCircuitOpen, 'Ollama should have been skipped by circuit breaker');
+  const res = await manager.classifyIntent({ message: 'teste de deadline' });
+  assert.equal(res.provider, 'STATIC');
 });

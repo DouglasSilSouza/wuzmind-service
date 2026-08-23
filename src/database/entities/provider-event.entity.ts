@@ -1,41 +1,41 @@
 import {
+  Entity,
+  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  Entity,
   Index,
-  PrimaryGeneratedColumn,
 } from 'typeorm';
 
-@Entity({ name: 'wuzmind_provider_events' })
+@Entity('wuzmind_provider_events')
 export class ProviderEventEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ name: 'correlation_id', type: 'varchar', length: 100, nullable: true })
-  @Index('idx_wuzmind_provider_events_corr')
-  correlationId!: string | null;
+  @Column({ type: 'varchar', length: 100, nullable: true, name: 'correlation_id' })
+  @Index()
+  correlationId?: string | null;
 
-  @Column({ name: 'operation', type: 'varchar', length: 50 })
+  @Column({ type: 'varchar', length: 50 })
   operation!: string;
 
-  @Column({ name: 'provider', type: 'varchar', length: 50 })
+  @Column({ type: 'varchar', length: 30 })
   provider!: string;
 
-  @Column({ name: 'model', type: 'varchar', length: 100, nullable: true })
-  model!: string | null;
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  model?: string | null;
 
-  @Column({ name: 'status', type: 'varchar', length: 30 })
+  @Column({ type: 'varchar', length: 20 })
   status!: string;
 
-  @Column({ name: 'duration_ms', type: 'int' })
+  @Column({ type: 'integer', name: 'duration_ms' })
   durationMs!: number;
 
-  @Column({ name: 'error_code', type: 'varchar', length: 100, nullable: true })
-  errorCode!: string | null;
+  @Column({ type: 'text', nullable: true, name: 'error_code' })
+  errorCode?: string | null;
 
-  @Column({ name: 'metadata', type: 'jsonb', default: {} })
+  @Column({ type: 'jsonb', default: {} })
   metadata!: Record<string, unknown>;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 }
