@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ApiKeyGuard } from '../../dist/modules/common/auth/api-key.guard.js';
 
-test('ApiKeyGuard - Validates x-wuzmind-api-key header', () => {
+test('ApiKeyGuard - Validates API key from multiple headers', () => {
   const mockConfig = {
     get: (key) => (key === 'WUZMIND_API_KEY' ? 'valid_super_secret_key' : null),
   };
@@ -13,24 +13,33 @@ test('ApiKeyGuard - Validates x-wuzmind-api-key header', () => {
 
   const guard = new ApiKeyGuard(mockConfig, mockReflector);
 
-  const makeContext = (headers) => ({
+  const makeContext = (headers, query = {}) => ({
     getHandler: () => ({}),
     getClass: () => ({}),
     switchToHttp: () => ({
-      getRequest: () => ({ headers }),
+      getRequest: () => ({ headers, query, method: 'POST', url: '/v1/recovery' }),
     }),
   });
 
   assert.throws(() => {
     guard.canActivate(makeContext({}));
-  }, /Invalid or missing x-wuzmind-api-key/);
+  }, /Invalid or missing API key/);
 
   assert.throws(() => {
     guard.canActivate(makeContext({ 'x-wuzmind-api-key': 'wrong_key' }));
-  }, /Invalid or missing x-wuzmind-api-key/);
+  }, /Invalid or missing API key/);
 
-  const validResult = guard.canActivate(makeContext({ 'x-wuzmind-api-key': 'valid_super_secret_key' }));
-  assert.equal(validResult, true);
+  // Supports x-wuzmind-api-key
+  assert.equal(guard.canActivate(makeContext({ 'x-wuzmind-api-key': 'valid_super_secret_key' })), true);
+
+  // Supports x-api-key
+  assert.equal(guard.canActivate(makeContext({ 'x-api-key': 'valid_super_secret_key' })), true);
+
+  // Supports Authorization Bearer
+  assert.equal(guard.canActivate(makeContext({ authorization: 'Bearer valid_super_secret_key' })), true);
+
+  // Supports query parameter
+  assert.equal(guard.canActivate(makeContext({}, { apiKey: 'valid_super_secret_key' })), true);
 });
 
 test('ApiKeyGuard - Allows Public endpoints without key', () => {
