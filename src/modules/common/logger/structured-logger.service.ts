@@ -1,4 +1,4 @@
-import { Injectable, LoggerService } from '@nestjs/common';
+import { Injectable, LoggerService, Optional } from '@nestjs/common';
 
 const SENSITIVE_PATTERNS = [
   /api[-_]?key/i,
@@ -15,8 +15,8 @@ const SENSITIVE_PATTERNS = [
 export class StructuredLoggerService implements LoggerService {
   private contextName: string;
 
-  constructor(context?: string) {
-    this.contextName = context || 'WuzMind';
+  constructor(@Optional() context?: string) {
+    this.contextName = typeof context === 'string' ? context : 'WuzMind';
   }
 
   setContext(context: string) {

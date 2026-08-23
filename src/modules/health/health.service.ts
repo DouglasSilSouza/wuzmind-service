@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { AiProviderManager } from '../ai/ai-provider.manager';
@@ -8,7 +8,7 @@ export class HealthService {
   constructor(
     private readonly configService: ConfigService,
     private readonly aiProviderManager: AiProviderManager,
-    private readonly dataSource?: DataSource,
+    @Optional() private readonly dataSource?: DataSource,
   ) {}
 
   async checkHealth() {
