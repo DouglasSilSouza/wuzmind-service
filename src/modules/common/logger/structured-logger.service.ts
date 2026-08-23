@@ -25,6 +25,13 @@ export class StructuredLoggerService implements LoggerService {
 
   public redact(obj: unknown): unknown {
     if (obj === null || obj === undefined) return obj;
+    if (obj instanceof Error) {
+      return {
+        name: obj.name,
+        message: typeof obj.message === 'string' ? this.redact(obj.message) : obj.message,
+        stack: obj.stack,
+      };
+    }
     if (typeof obj === 'string') {
       let redacted = obj;
       for (const pattern of SENSITIVE_PATTERNS) {
@@ -55,17 +62,27 @@ export class StructuredLoggerService implements LoggerService {
   private formatMessage(level: string, message: unknown, context?: string, meta?: unknown) {
     const timestamp = new Date().toISOString();
     const activeContext = context || this.contextName;
-    const sanitizedMsg = this.redact(message);
-    const sanitizedMeta = meta ? this.redact(meta) : undefined;
+
+    let msgContent: unknown;
+    if (message instanceof Error) {
+      msgContent = message.message;
+      if (!meta && message.stack) {
+        meta = { stack: message.stack };
+      }
+    } else if (typeof message === 'object' && message !== null) {
+      msgContent = this.redact(message);
+    } else {
+      msgContent = this.redact(String(message));
+    }
 
     const payload: Record<string, unknown> = {
       timestamp,
       level,
       context: activeContext,
-      message: sanitizedMsg,
+      message: msgContent,
     };
-    if (sanitizedMeta !== undefined) {
-      payload.meta = sanitizedMeta;
+    if (meta !== undefined) {
+      payload.meta = this.redact(meta);
     }
     return JSON.stringify(payload);
   }
@@ -75,7 +92,7 @@ export class StructuredLoggerService implements LoggerService {
   }
 
   error(message: unknown, trace?: string, context?: string) {
-    console.error(this.formatMessage('ERROR', message, context, { trace }));
+    console.error(this.formatMessage('ERROR', message, context, trace ? { trace } : undefined));
   }
 
   warn(message: unknown, context?: string) {
