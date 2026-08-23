@@ -17,7 +17,7 @@ import { buildMediaClassifierPrompt } from '../ai/prompts/media-classifier.promp
 export class GeminiProvider implements AiProvider {
   readonly name = 'GEMINI';
   private readonly apiKey?: string;
-  private readonly model: string;
+  private readonly model?: string;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
 
@@ -26,11 +26,11 @@ export class GeminiProvider implements AiProvider {
     const rawModel = this.configService.get<string>('GEMINI_MODEL') || 'gemini-1.5-flash';
     this.model = rawModel.replace(/^models\//, '');
     this.baseUrl = this.configService.get<string>('GEMINI_BASE_URL') || 'https://generativelanguage.googleapis.com/v1beta';
-    this.timeoutMs = parseInt(this.configService.get<string>('AI_REQUEST_TIMEOUT_MS') || '4000', 10);
+    this.timeoutMs = parseInt(this.configService.get<string>('AI_REQUEST_TIMEOUT_MS') || '8000', 10);
   }
 
   async isAvailable(): Promise<boolean> {
-    return Boolean(this.apiKey);
+    return Boolean(this.apiKey && this.model);
   }
 
   private cleanJson(raw: string): string {
@@ -46,11 +46,13 @@ export class GeminiProvider implements AiProvider {
   }
 
   private async callGemini(prompt: string): Promise<string> {
-    if (!this.apiKey) {
-      throw new Error('Gemini API key is not configured');
+    if (!this.apiKey || !this.model) {
+      throw new Error('Gemini provider is not configured with API key and model');
     }
 
-    const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+    const cleanBase = this.baseUrl.replace(/\/+$/, '');
+    const cleanModel = (this.model || 'gemini-1.5-flash').replace(/^models\//, '');
+    const url = `${cleanBase}/models/${cleanModel}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -70,10 +72,11 @@ export class GeminiProvider implements AiProvider {
       clearTimeout(timer);
 
       if (!res.ok) {
-        throw new Error(`Gemini API returned status ${res.status}`);
+        const errBody = await res.text().catch(() => '');
+        throw new Error(`Gemini API returned status ${res.status} for model ${this.model}: ${errBody}`);
       }
 
-      const data = (await res.json()) as any;
+      const data = await res.json() as any;
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text) {
         throw new Error('Gemini response missing expected content parts');

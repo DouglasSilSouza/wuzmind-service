@@ -27,14 +27,15 @@ export class OllamaProvider implements AiProvider {
     this.baseUrl = this.configService.get<string>('OLLAMA_URL') || 'http://ollama:11434';
     this.primaryModel = this.configService.get<string>('OLLAMA_PRIMARY_MODEL') || 'qwen2.5:3b';
     this.fallbackModel = this.configService.get<string>('OLLAMA_FALLBACK_MODEL') || 'llama3.2:3b';
-    this.timeoutMs = parseInt(this.configService.get<string>('AI_REQUEST_TIMEOUT_MS') || '3000', 10);
+    this.timeoutMs = parseInt(this.configService.get<string>('AI_REQUEST_TIMEOUT_MS') || '8000', 10);
   }
 
   async isAvailable(): Promise<boolean> {
     try {
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 1500);
+      const id = setTimeout(() => controller.abort(), 2500);
       const res = await fetch(`${this.baseUrl}/api/tags`, {
+        method: 'GET',
         signal: controller.signal,
       });
       clearTimeout(id);
@@ -77,7 +78,8 @@ export class OllamaProvider implements AiProvider {
       clearTimeout(timer);
 
       if (!response.ok) {
-        throw new Error(`Ollama returned status ${response.status}`);
+        const errBody = await response.text().catch(() => '');
+        throw new Error(`Ollama returned status ${response.status} for model ${model}: ${errBody}`);
       }
 
       const data = (await response.json()) as { response?: string };
