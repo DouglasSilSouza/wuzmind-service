@@ -1,0 +1,74 @@
+services:
+  wuzmind-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/douglassilsouza/wuzmind-service:latest
+    container_name: wuzmind-service
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    ports:
+      - "3002:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+
+      DATABASE_URL: ${DATABASE_URL}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-wuzmind}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+
+      WUZMIND_API_KEY: ${WUZMIND_API_KEY}
+
+      AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-OLLAMA,GEMINI,OPENAI,STATIC}
+      AI_REQUEST_TIMEOUT_MS: ${AI_REQUEST_TIMEOUT_MS:-8000}
+      AI_MAX_RETRIES_PER_PROVIDER: ${AI_MAX_RETRIES_PER_PROVIDER:-1}
+      AI_MIN_CONFIDENCE: ${AI_MIN_CONFIDENCE:-0.65}
+
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_PRIMARY_MODEL: ${OLLAMA_PRIMARY_MODEL:-qwen3:4b}
+      OLLAMA_FALLBACK_MODEL: ${OLLAMA_FALLBACK_MODEL:-llama3.2:3b}
+
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
+
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+    networks:
+      - ContasNet
+
+    deploy:
+      replicas: 1
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=ContasNet
+        - traefik.http.routers.wuzmind.rule=Host(`wuzmind.dsilvamoda.cloud`)
+        - traefik.http.routers.wuzmind.entrypoints=websecure
+        - traefik.http.routers.wuzmind.tls=true
+        - traefik.http.routers.wuzmind.tls.certresolver=letsencryptresolver
+        - traefik.http.services.wuzmind.loadbalancer.server.port=3000
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: wuzmind-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - ContasNet
+
+volumes:
+  ollama_data:
+
+networks:
+  ContasNet:
+    external: true
+    name: ContasNet

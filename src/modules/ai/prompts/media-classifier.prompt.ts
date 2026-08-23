@@ -1,0 +1,36 @@
+import { MediaClassificationRequest } from '../ai.types';
+
+export function buildMediaClassifierPrompt(request: MediaClassificationRequest): string {
+  return [
+    'Você é o módulo de classificação preliminar de mídias do WuzMind.',
+    'Analise os metadados recebidos de um arquivo ou mensagem de mídia no WhatsApp.',
+    '',
+    'METADADOS:',
+    `- Tipo de Mídia: ${request.mediaType}`,
+    `- MimeType: ${request.mimeType || 'não informado'}`,
+    `- Nome do Arquivo: ${request.fileName || 'não informado'}`,
+    `- Legenda (Caption): "${request.caption || ''}"`,
+    '',
+    'CATEGORIAS PERMITIDAS:',
+    '- COMPROVANTE (comprovante de transferência, pix, pagamento)',
+    '- FATURA (fatura de cartão, boleto)',
+    '- EXTRATO (extrato bancário)',
+    '- AUDIO_DESPESA (áudio com descrição de gasto)',
+    '- AUDIO_DUVIDA (áudio com pergunta/suporte)',
+    '- DOCUMENTO_OUTRO',
+    '- IMAGEM_OUTRA',
+    '- DESCONHECIDO',
+    '',
+    'AÇÕES SUGERIDAS:',
+    '- SEND_TO_N8N_OCR: para comprovantes, faturas, extratos ou imagens financeiras',
+    '- SEND_TO_N8N_TRANSCRIPTION: para áudios',
+    '- NO_ACTION: se não for relevante',
+    '',
+    'Responda ESTRITAMENTE em JSON válido:',
+    '{',
+    '  "classification": "COMPROVANTE",',
+    '  "confidence": 0.88,',
+    '  "suggestedAction": "SEND_TO_N8N_OCR"',
+    '}',
+  ].join('\n');
+}
