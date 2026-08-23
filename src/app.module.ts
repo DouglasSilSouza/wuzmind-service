@@ -32,6 +32,8 @@ import { ProviderEventEntity } from './database/entities/provider-event.entity';
             type: 'postgres',
             url: dbUrl,
             entities: [ContextEntity, ProviderEventEntity],
+            migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
+            migrationsRun: true,
             synchronize: false,
             autoLoadEntities: true,
           };
@@ -44,6 +46,8 @@ import { ProviderEventEntity } from './database/entities/provider-event.entity';
           password: configService.get<string>('DB_PASSWORD', 'postgres'),
           database: configService.get<string>('DB_NAME', 'wuzmind'),
           entities: [ContextEntity, ProviderEventEntity],
+          migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
+          migrationsRun: true,
           synchronize: false,
           autoLoadEntities: true,
         };
