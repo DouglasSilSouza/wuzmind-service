@@ -5,7 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { StructuredLoggerService } from '../logger/structured-logger.service';
 
 @Catch()
@@ -15,6 +15,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | object = 'Internal server error';
@@ -27,7 +28,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message = { message: exception.message };
     }
 
-    this.logger.error('HTTP Exception caught', exception instanceof Error ? exception.stack : undefined);
+    if (status >= 500) {
+      this.logger.error(`HTTP ${status} on ${request.method} ${request.url}`, exception instanceof Error ? exception.stack : undefined);
+    } else if (status === 404) {
+      this.logger.debug(`HTTP 404 Not Found: ${request.method} ${request.url}`);
+    } else {
+      this.logger.warn(`HTTP ${status} on ${request.method} ${request.url}`);
+    }
 
     response.status(status).json({
       statusCode: status,
