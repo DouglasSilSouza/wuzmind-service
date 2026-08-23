@@ -67,6 +67,7 @@ export class OllamaProvider implements AiProvider {
           prompt,
           stream: false,
           format: 'json',
+          keep_alive: '24h',
           options: {
             temperature: 0.1,
             num_predict: 150,
